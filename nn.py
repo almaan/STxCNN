@@ -144,6 +144,13 @@ class SpotDataset(Dataset):
                             compression = 'gzip',
                            )
 
+            rowSums = c.sum(axis = 1).reshape(-1,1)
+
+            c.iloc[:,:] = np.divide(c.values,
+                                    rowSums,
+                                    where = (rowSums != 0)
+                                   )
+
             if self.genes is not None:
                 tc = pd.DataFrame(np.zeros((c.shape[0],
                                             len(self.genelist))

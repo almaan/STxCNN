@@ -73,11 +73,11 @@ for section in range(len(cpths)):
 
         cntpth = osp.join(main_pth,
                           'count_data',
-                          '.'.join([uid,'tsv'])
+                          '.'.join([uid,'tsv.gz'])
                          )
         mtapth = osp.join(main_pth,
                           'meta_data',
-                          '.'.join([uid,'tsv'])
+                          '.'.join([uid,'tsv.gz'])
                          )
 
         lblpth = osp.join(main_pth,

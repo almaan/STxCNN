@@ -2,6 +2,10 @@
 
 import os
 import os.path as osp
+import glob
+import re
+import datetime
+import argparse
 
 import numpy as np
 import pandas as pd
@@ -15,6 +19,8 @@ from torch.utils.data import Dataset, random_split, DataLoader
 
 import torchvision
 import torchvision.transforms as transforms
+
+from parser import parser
 
 class ToTensor:
 
@@ -65,7 +71,7 @@ class FlipV(FlipBase):
 
 class SpotDataset(Dataset):
     def __init__(self,
-                 data_pth,
+                 data_pths,
                  transform = None,
                  genes = None,
                  size = 1000,
@@ -74,20 +80,25 @@ class SpotDataset(Dataset):
                  arraysize = 8,
                 ):
 
-        self.data_pth = data_pth
-        self.genelist = pd.Index(genes) if genes else pd.Index([])
+        self.data_pths = data_pths
+        self.genelist = pd.Index(genes) if genes is not None else pd.Index([])
         self.genes = genes
         self.samples = []
         self.arraysize = arraysize
         self.size = size
         self.nclasses = n_classes
 
-        self.encoding =  {'her2lum' : 0,
-                          'her2nonlum' : 1,
-                          'luma' : 2,
-                          'lumb' : 3,
-                          'tnbc' : 4
-                         }
+        if encoding is None and isinstance(encoding,dict):
+            self.encoding = encoding
+        else:
+            self.encoding =  {'her2lum' : 0,
+                              'her2nonlum' : 1,
+                              'luma' : 2,
+                              'lumb' : 3,
+                              'tnbc' : 4
+                             }
+
+        self.decoding = { v:k for k,v in self.encoding.items() }
 
         self.transform = transform
 
@@ -107,15 +118,10 @@ class SpotDataset(Dataset):
 
 
     def _init(self,):
-        count_pth = osp.join(self.data_pth,
-                             'count_data',
-                            )
-        label_pth = osp.join(self.data_pth,
-                            'label_data'
-                            )
 
-        count_pth = [osp.join(count_pth,x) for x in os.listdir(count_pth)]
-        label_pth = [osp.join(label_pth,x) for x in os.listdir(label_pth)]
+        count_pth = self.data_pths['count_data']
+        label_pth = self.data_pths['label_data']
+
 
         count_pth.sort()
         label_pth.sort()
@@ -139,15 +145,15 @@ class SpotDataset(Dataset):
                            )
 
             if self.genes is not None:
-                tc = pd.DataFrame(np.zeros((self.samples[ii][0].shape[0],
+                tc = pd.DataFrame(np.zeros((c.shape[0],
                                             len(self.genelist))
                                            ),
                                  columns = self.genelist
                                  )
 
                 inter = c.columns.intersection(self.genelist)
-                tc.loc[:,inter] = c.values.astype(np.float32)
-                tc = self.frame2tensor(tc)
+                tc.loc[:,inter] = c.loc[:,inter].values.astype(np.float32)
+                tc = self.frame2tensor(tc.values)
             else:
                 self.genelist = self.genelist.union(c.columns)
                 tc = c
@@ -172,11 +178,11 @@ class SpotDataset(Dataset):
                 tc.loc[:,inter] = self.samples[ii][0].values.astype(np.float32)
                 self.samples[ii][0] = self.frame2tensor(tc.values.astype(np.float32))
 
-        self.samples = [ {'array':x[0],'label':x[1]} for x in self.samples]
-
-        print(self.genelist)
+        self.samples = [ {'array':x[0],
+                          'label':x[1]} for x in self.samples]
 
         self.G = len(self.genelist)
+        print(f"Assembled dataset of {len(self.samples)} arrays")
 
 
     def _one_hot(self,x : str):
@@ -190,7 +196,7 @@ class SpotDataset(Dataset):
         x = x.reshape(len(self.genelist),
                       self.arraysize,
                       self.arraysize,
-                      )
+                      ).astype(np.float32)
 
         return x
 
@@ -232,6 +238,7 @@ class CNN(t.nn.Module):
                              bias = True,
                             )
 
+        # Input 64x1 --> Output 5
         self.fc2 = nn.Linear(in_features = 64,
                              out_features = 5,
                              bias = True,
@@ -248,19 +255,61 @@ class CNN(t.nn.Module):
 
         return x
 
+def test(net,
+         test_set,
+         nlabels = 5,
+         num_workers = 1,
+         device = None,
+         ):
+
+       if device is None:
+            device = t.device('cpu')
+
+
+
+       decoder = test_set.decoding
+
+       test_loader = DataLoader(test_set,
+                                num_workers = num_workers,
+                                batch_size = len(test_set))
+
+       class_correct = np.zeros(nlabels)
+       class_total = np.zeros(nlabels)
+       with t.no_grad():
+            for data in test_loader:
+                array, labels = data['array'].to(device), data['label'].to(device)
+                outputs = net(array)
+                _,pred = t.max(outputs,1)
+                c = (pred == labels).squeeze()
+
+            for i in range(len(test_set)):
+                label = labels[i]
+                class_correct[label] += c[i].item()
+                class_total[label] += 1
+
+       for i in range(nlabels):
+           txtlabel = decoder[i]
+           print(f'Accuracy of label {txtlabel} : {100 * class_correct[i] / class_total[i]}')
+
+
 
 def train(net,
           train_set,
           val_set,
           batch_size,
           n_epochs,
+          out_dir = os.getcwd(),
           lr = 0.001,
-          n_prints = 10,
+          device = None,
+          num_workers = 1,
           ):
+
+    if device is None:
+        device = t.device('cpu')
 
     train_loader = DataLoader(train_set,
                               batch_size = batch_size,
-                              num_workers = 2
+                              num_workers = num_workers,
                              )
 
 
@@ -272,17 +321,16 @@ def train(net,
                          lr = lr,
                         )
 
-    print_on = 10
-    net.train()
+    val_min = np.inf
 
     for epoch in range(n_epochs):
-
+        net.train()
         total_loss = 0.0
 
         for i, data in enumerate(train_loader):
 
             inputs, labels = data['array'], data['label']
-            inputs, labels = Variable(inputs), Variable(labels)
+            inputs, labels = Variable(inputs).to(device), Variable(labels).to(device)
 
             optim.zero_grad()
 
@@ -293,64 +341,141 @@ def train(net,
 
             total_loss += loss.item()
 
-            if (i + 1) % print_on == 0:
-                print(f"Epoch : {epoch + 1:d} | train_loss : {total_loss / print_on}")
+        print(f"Epoch : {epoch + 1:d} | train_loss : {total_loss}")
 
 
         total_val_loss = 0.0
         val_loader = DataLoader(val_set,
                                   batch_size = batch_size,
-                                  num_workers = 2
+                                  num_workers = num_workers,
                                   )
 
         net.eval()
 
         for sample in val_loader:
 
-             inputs, labels = Variable(sample['array']), Variable(sample['label'])
+             inputs = Variable(sample['array']).to(device)
+             labels = Variable(sample['label']).to(device)
              val_outputs = net(inputs)
-             val_loss = loss_fun(val_outputs, labels.type(t.LongTensor))
+             val_loss = loss_fun(val_outputs, labels)
              total_val_loss += val_loss.item()
+
+        if total_val_loss < val_min:
+            model_opth = osp.join(output_dir,
+                                  '.'.join([TAG,
+                                           'model.pt'
+                                           ]
+                                          )
+                                 )
+
+            t.save(cnn_net.state_dict(),
+                   model_opth)
+
+            val_min = total_val_loss
+
 
         print(f"Validation loss : {total_val_loss / len(val_loader) }")
 
     print("Training Completed")
 
-p_train = 0.8
-nsamples = 20
+if __name__ == '__main__':
 
-data_pth = "/home/alma/ST-2018/BC_Stanford/data/arrays"
+    date = str(datetime.datetime.now())
 
-trf = transforms.Compose([RotateK90(),
-                          FlipH(),
-                          FlipV(),
-                          ToTensor(),
-                         ]
-                        )
+    prs = parser(date = date)
+    args = prs.parse_args()
 
+    TAG = re.sub(':|-|\\.| ','',date)
 
-dataset = SpotDataset(data_pth,
-                      size = nsamples,
-                      transform = trf)
+    if args.output_dir is None:
+        output_dir = os.getcwd()
+    else:
+        output_dir = args.output_dir
 
-
-len_train = int(len(dataset)*p_train)
-len_val = len(dataset) - len_train
-
-train_set, val_set = random_split(dataset,
-                                  (len_train,len_val),
-                                  )
+    if args.device.lower() == 'gpu' and t.cuda.is_available():
+       device = t.device('cuda')
+    else:
+       device = t.device('cpu')
 
 
-cnn_net = CNN(dataset.G)
+    print(f"Will be using Device : {str(device)}")
 
-train(cnn_net,
-      train_set = train_set,
-      val_set = val_set,
-      batch_size = 32,
-      n_epochs = 100,
-      lr = 0.001,
-     )
+    p_train = args.p_train
+    nsamples = args.samples
 
+    if args.training_patients:
+        training_patiens = [ str(x) for x in args.training_patiens ]
+    else:
+        training_patients = ["23287","23567","23268","23270","23209"]
+
+    main_data_pth = args.data_pth
+    count_data = glob.glob(main_data_pth + '/count_data/*.tsv.gz')
+    label_data = glob.glob(main_data_pth + '/label_data/*.txt')
+
+    eval_label_data = [ x for x in label_data if \
+                       osp.basename(x).split('.')[0] in training_patients]
+
+    eval_count_data = [ x for x in count_data if \
+                       osp.basename(x).split('.')[0] in training_patients]
+
+
+    eval_pths = dict(count_data = eval_count_data,
+                     label_data = eval_label_data)
+
+    train_label_data =  [ x for x in label_data if \
+                         osp.basename(x).split('.')[0] not in training_patients]
+    train_count_data = [ x for x in count_data if \
+                        osp.basename(x).split('.')[0] not in training_patients]
+
+    if args.samples is None:
+        nsamples = min(args.samples,len(train_count_data))
+    else:
+        nsamples = len(train_coint_data)
+
+    train_pths = dict(count_data = train_count_data,
+                      label_data = train_label_data)
+
+
+
+    trf = transforms.Compose([RotateK90(),
+                              FlipH(),
+                              FlipV(),
+                              ToTensor(),
+                             ]
+                            )
+
+
+    dataset = SpotDataset(train_pths,
+                          size = nsamples,
+                          transform = trf)
+
+
+
+
+    len_train = int(len(dataset)*p_train)
+    len_val = len(dataset) - len_train
+
+    train_set, val_set = random_split(dataset,
+                                      (len_train,len_val),
+                                      )
+
+
+    cnn_net = CNN(dataset.G)
+
+    train(cnn_net,
+          train_set = train_set,
+          val_set = val_set,
+          batch_size = args.batch_size,
+          n_epochs = args.epochs,
+          lr = 0.001,
+         )
+
+    eval_dataset = SpotDataset(eval_pths,
+                               size = len(eval_count_data),
+                               genes = dataset.genelist,
+                              )
+
+    test(cnn_net,
+         eval_dataset)
 
 

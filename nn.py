@@ -138,12 +138,12 @@ class SpotDataset(Dataset):
         label_pth = [ label_pth[x] for x in unsrt ]
 
         for pcnt, plbl in zip(count_pth,label_pth):
-            print(f"loading {pcnt}")
+            print(f"loading {pcnt}", flush = True)
             c = pd.read_csv(pcnt,
                             sep = '\t',
                             header = 0,
                             index_col = 0,
-                            compression = 'gzip',
+                            #compression = 'gzip',
                            )
 
             rowSums = c.values.sum(axis = 1).reshape(-1,1)
@@ -191,7 +191,7 @@ class SpotDataset(Dataset):
                           'label':x[1]} for x in self.samples]
 
         self.G = len(self.genelist)
-        print(f"Assembled dataset of {len(self.samples)} arrays")
+        print(f"Assembled dataset of {len(self.samples)} arrays",flush = True)
 
 
     def _one_hot(self,x : str):
@@ -298,7 +298,7 @@ def test(net,
 
        for i in range(nlabels):
            txtlabel = decoder[i]
-           print(f'Accuracy of label {txtlabel} : {100 * class_correct[i] / class_total[i]}')
+           print(f'Accuracy of label {txtlabel} : {100 * class_correct[i] / class_total[i]}',flush = True)
 
 
 
@@ -350,7 +350,7 @@ def train(net,
 
             total_loss += loss.item()
 
-        print(f"Epoch : {epoch + 1:d} | train_loss : {total_loss}")
+        print(f"Epoch : {epoch + 1:d} | train_loss : {total_loss}", flush = True)
 
 
         total_val_loss = 0.0
@@ -383,9 +383,9 @@ def train(net,
             val_min = total_val_loss
 
 
-        print(f"Validation loss : {total_val_loss / len(val_loader) }")
+        print(f"Validation loss : {total_val_loss / len(val_loader) }", flush = True)
 
-    print("Training Completed")
+    print("Training Completed", flush = True)
 
 if __name__ == '__main__':
 
@@ -407,7 +407,7 @@ if __name__ == '__main__':
        device = t.device('cpu')
 
 
-    print(f"Will be using Device : {str(device)}")
+    print(f"Will be using Device : {str(device)}",flush = True)
 
     p_train = args.p_train
 
@@ -417,7 +417,7 @@ if __name__ == '__main__':
         test_patients = ["23287","23567","23268","23270","23209"]
 
     main_data_pth = args.data_pth
-    count_data = glob.glob(main_data_pth + '/count_data/*.tsv.gz')
+    count_data = glob.glob(main_data_pth + '/count_data/*.tsv')
     label_data = glob.glob(main_data_pth + '/label_data/*.txt')
 
     eval_label_data = [ x for x in label_data if \

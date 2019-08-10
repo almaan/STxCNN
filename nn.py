@@ -143,16 +143,12 @@ class SpotDataset(Dataset):
                             sep = '\t',
                             header = 0,
                             index_col = 0,
-                            #compression = 'gzip',
+                            compression = 'gzip',
                            )
-
+            print("step 1", flush = True)
             rowSums = c.values.sum(axis = 1).reshape(-1,1)
-
-            c.iloc[:,:] = np.divide(c.values,
-                                    rowSums,
-                                    where = (rowSums != 0)
-                                   )
-
+            # removed rel.freq
+            print("step 2", flush = True)
             if self.genes is not None:
                 tc = pd.DataFrame(np.zeros((c.shape[0],
                                             len(self.genelist))
@@ -162,11 +158,20 @@ class SpotDataset(Dataset):
 
                 inter = c.columns.intersection(self.genelist)
                 tc.loc[:,inter] = c.loc[:,inter].values.astype(np.float32)
-                tc = self.frame2tensor(tc.values)
+
+                tc = tc.values
+                tc = np.divide(tc,
+                               rowSums,
+                               where = (rowSums != 0)
+                              )
+
+
+                tc = self.frame2tensor(tc)
             else:
                 self.genelist = self.genelist.union(c.columns)
                 tc = c
 
+            print("step 3",flush = True)
             with open(plbl,'r+') as lopen:
                 l = lopen.readlines()[0]
 
@@ -174,6 +179,7 @@ class SpotDataset(Dataset):
 
             self.samples.append([tc,l])
 
+        print("step 4", flush = True)
         if self.genes is None:
             for ii in range(len(self.samples)):
 
@@ -184,9 +190,17 @@ class SpotDataset(Dataset):
                                  )
 
                 inter = self.samples[ii][0].columns.intersection(self.genelist)
-                tc.loc[:,inter] = self.samples[ii][0].values.astype(np.float32)
-                self.samples[ii][0] = self.frame2tensor(tc.values.astype(np.float32))
+                tc.loc[:,inter] = self.samples[ii][0].values
 
+                tc = tc.values
+                tc = np.divide(tc,
+                               rowSums,
+                               where = (rowSums != 0)
+                              )
+
+                self.samples[ii][0] = self.frame2tensor(tc)
+
+        print("step 5", flush = True)
         self.samples = [ {'array':x[0],
                           'label':x[1]} for x in self.samples]
 
@@ -417,7 +431,7 @@ if __name__ == '__main__':
         test_patients = ["23287","23567","23268","23270","23209"]
 
     main_data_pth = args.data_pth
-    count_data = glob.glob(main_data_pth + '/count_data/*.tsv')
+    count_data = glob.glob(main_data_pth + '/count_data/*.tsv.gz')
     label_data = glob.glob(main_data_pth + '/label_data/*.txt')
 
     eval_label_data = [ x for x in label_data if \

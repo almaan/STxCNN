@@ -70,6 +70,7 @@ class FlipV(FlipBase):
         self.flipmethod = np.flipud
 
 class SpotDataset(Dataset):
+
     def __init__(self,
                  data_pths,
                  transform = None,
@@ -137,6 +138,7 @@ class SpotDataset(Dataset):
         label_pth = [ label_pth[x] for x in unsrt ]
 
         for pcnt, plbl in zip(count_pth,label_pth):
+            print(f"loading {pcnt}")
             c = pd.read_csv(pcnt,
                             sep = '\t',
                             header = 0,
@@ -144,7 +146,7 @@ class SpotDataset(Dataset):
                             compression = 'gzip',
                            )
 
-            rowSums = c.sum(axis = 1).reshape(-1,1)
+            rowSums = c.values.sum(axis = 1).reshape(-1,1)
 
             c.iloc[:,:] = np.divide(c.values,
                                     rowSums,
@@ -370,7 +372,7 @@ def train(net,
         if total_val_loss < val_min:
             model_opth = osp.join(output_dir,
                                   '.'.join([TAG,
-                                           'model.pt'
+                                           'best.val.model.pt'
                                            ]
                                           )
                                  )
@@ -408,36 +410,38 @@ if __name__ == '__main__':
     print(f"Will be using Device : {str(device)}")
 
     p_train = args.p_train
-    nsamples = args.samples
 
-    if args.training_patients:
-        training_patiens = [ str(x) for x in args.training_patiens ]
+    if args.test_patients:
+        test_patients = [ str(x) for x in args.test_patients ]
     else:
-        training_patients = ["23287","23567","23268","23270","23209"]
+        test_patients = ["23287","23567","23268","23270","23209"]
 
     main_data_pth = args.data_pth
     count_data = glob.glob(main_data_pth + '/count_data/*.tsv.gz')
     label_data = glob.glob(main_data_pth + '/label_data/*.txt')
 
     eval_label_data = [ x for x in label_data if \
-                       osp.basename(x).split('.')[0] in training_patients]
+                       osp.basename(x).split('.')[0] in test_patients]
 
     eval_count_data = [ x for x in count_data if \
-                       osp.basename(x).split('.')[0] in training_patients]
+                       osp.basename(x).split('.')[0] in test_patients]
 
 
     eval_pths = dict(count_data = eval_count_data,
                      label_data = eval_label_data)
 
     train_label_data =  [ x for x in label_data if \
-                         osp.basename(x).split('.')[0] not in training_patients]
+                         osp.basename(x).split('.')[0] not in test_patients]
     train_count_data = [ x for x in count_data if \
-                        osp.basename(x).split('.')[0] not in training_patients]
+                        osp.basename(x).split('.')[0] not in test_patients]
 
-    if args.samples is None:
-        nsamples = min(args.samples,len(train_count_data))
+    if args.samples is not None:
+        nsamples = min(args.samples,
+                       len(train_count_data))
     else:
-        nsamples = len(train_coint_data)
+        nsamples = len(train_count_data)
+
+    print(f"Will be using {nsamples} for training")
 
     train_pths = dict(count_data = train_count_data,
                       label_data = train_label_data)
@@ -474,8 +478,18 @@ if __name__ == '__main__':
           val_set = val_set,
           batch_size = args.batch_size,
           n_epochs = args.epochs,
-          lr = 0.001,
+          lr = args.learning_rate,
          )
+
+    final_model_opth = osp.join(output_dir,
+                              '.'.join([TAG,
+                                       'final.model.pt'
+                                       ]
+                                      )
+                                )
+
+    t.save(cnn_net.state_dict(),
+           final_model_opth)
 
     eval_dataset = SpotDataset(eval_pths,
                                size = len(eval_count_data),

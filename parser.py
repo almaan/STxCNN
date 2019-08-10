@@ -62,7 +62,7 @@ def parser(date):
                                     )
                     )
 
-    prs.add_argument("-tp","--training_patients",
+    prs.add_argument("-tp","--test_patients",
                      required = False,
                      default = None,
                      type = str,
@@ -80,6 +80,7 @@ def parser(date):
                                      ]
                                     )
                     )
+
     prs.add_argument("-pt","--p_train",
                          required = False,
                          default = 0.8,
@@ -88,6 +89,16 @@ def parser(date):
                                          ]
                                         )
                         )
+
+    prs.add_argument("-lr","--learning_rate",
+                         required = False,
+                         default = 0.001,
+                         type = float,
+                         help = ' '.join(["",
+                                         ]
+                                        )
+                        )
+
 
 
     return prs

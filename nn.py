@@ -139,7 +139,7 @@ class SpotDataset(Dataset):
 
         for k,(pcnt, plbl) in enumerate(zip(count_pth,label_pth)):
 
-            print(f"[{k}/{self.nsamples}] : loading {pcnt}",
+            print(f"[{k +1 }/{self.nsamples}] : loading {pcnt}",
                   flush = True)
 
             c = pd.read_csv(pcnt,
@@ -302,18 +302,21 @@ def test(net,
                 array, labels = data['array'].to(device), data['label'].to(device)
                 outputs = net(array)
                 _,pred = t.max(outputs,1)
+                print(pred)
                 c = (pred == labels).squeeze()
 
             for i in range(c.shape[0]):
                 label = labels[i]
                 class_correct[label] += c[i].item()
                 class_total[label] += 1
-                resmat[label[i],pred[i].item()] += 1
+                resmat[label,pred[i].item()] += 1
 
        resmat = pd.DataFrame(resmat,
                              columns = test_set.encoding.keys(),
-                             index = test_set.encodig.keys()
+                             index = test_set.encoding.keys()
                             )
+
+       class_total[class_total == 0] = np.nan
 
        for i in range(nlabels):
            txtlabel = decoder[i]
@@ -538,7 +541,8 @@ def main(output_dir,
            final_model_opth)
 
     eval_dataset = SpotDataset(eval_pths,
-                               size = len(eval_count_data),
+                               #size = len(eval_count_data),
+                               size =10,
                                genes = dataset.genelist,
                               )
 

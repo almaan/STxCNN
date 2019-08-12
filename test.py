@@ -73,7 +73,6 @@ if __name__ == "__main__":
 
         genelist = pd.Index(genelist)
 
-    print(genelist)
 
     model = t.load(model_pth)
 

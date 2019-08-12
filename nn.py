@@ -139,8 +139,7 @@ class SpotDataset(Dataset):
 
         for k,(pcnt, plbl) in enumerate(zip(count_pth,label_pth)):
 
-            print(f"[{k +1 }/{self.nsamples}] : loading {pcnt}",
-                  flush = True)
+
 
             c = pd.read_csv(pcnt,
                             sep = '\t',
@@ -149,6 +148,8 @@ class SpotDataset(Dataset):
                             compression = 'gzip',
                            )
             rowSums = c.values.sum(axis = 1).reshape(-1,1)
+
+
             if self.genes is not None:
                 tc = pd.DataFrame(np.zeros((c.shape[0],
                                             len(self.genelist))
@@ -173,6 +174,9 @@ class SpotDataset(Dataset):
 
             with open(plbl,'r+') as lopen:
                 l = lopen.readlines()[0]
+
+            print(f"[{k +1 }/{self.nsamples}] : loaded {pcnt} | subtype {l}",
+                  flush = True)
 
             l = self._one_hot(l)
 
@@ -202,7 +206,8 @@ class SpotDataset(Dataset):
                           'label':x[1]} for x in self.samples]
 
         self.G = len(self.genelist)
-        print(f"Assembled dataset of {len(self.samples)} arrays",flush = True)
+        print(f"Assembled dataset of {len(self.samples)} arrays",
+              flush = True)
 
 
     def _one_hot(self,x : str):
@@ -229,37 +234,38 @@ class CNN(t.nn.Module):
         super(CNN, self).__init__()
 
         self.in_channels = in_channels
-        # Input 8x8xG --> Output 8x8x100
+        # Input 8x8xG --> Output 8x8x1024
         self.conv1 = nn.Conv2d(in_channels = self.in_channels,
-                               out_channels = 100,
+                               out_channels = 1024,
                                kernel_size = 3,
                                padding = 1,
                                stride = 1,
                               )
 
-        # Input 8x8x100 --> Output 4x4x100
+        # Input 8x8x100 --> Output 4x4x1024
         self.pool = nn.AvgPool2d(kernel_size = 2,
                                  padding = 0,
                                  stride = 2,
                                 )
 
 
-        # Input 4x4x100 --> Output 3x3x20
+        # Input 4x4x1024--> Output 3x3x128
 
-        self.conv2 = nn.Conv2d(in_channels = 100,
-                               out_channels = 20,
+        self.conv2 = nn.Conv2d(in_channels = 1024,
+                               out_channels = 128,
                                kernel_size  = 2,
                                padding = 0,
                                stride = 1,
                               )
-        # Input 180x1 -- > Output 64
-        self.fc1 = nn.Linear(in_features = 180,
-                             out_features = 64,
+
+        # Input 1152x1 -- > Output 128
+        self.fc1 = nn.Linear(in_features = 1152,
+                             out_features = 128,
                              bias = True,
                             )
 
         # Input 64x1 --> Output 5
-        self.fc2 = nn.Linear(in_features = 64,
+        self.fc2 = nn.Linear(in_features = 128,
                              out_features = 5,
                              bias = True,
                             )
@@ -269,7 +275,7 @@ class CNN(t.nn.Module):
         x = F.relu(self.conv1(x))
         x = self.pool(x)
         x = self.conv2(x)
-        x = x.view(-1,180)
+        x = x.view(-1,1152)
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
 

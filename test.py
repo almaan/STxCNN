@@ -67,11 +67,13 @@ if __name__ == "__main__":
 
     model_pth = args.model
 
-    with open(args.gene_list,'w+') as gopen:
+    with open(args.gene_list,'r+') as gopen:
         genelist = list(map(lambda x: x.strip('\n'),
                             gopen.readlines()))
 
         genelist = pd.Index(genelist)
+
+    print(genelist)
 
     model = t.load(model_pth)
 

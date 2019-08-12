@@ -295,6 +295,8 @@ def test(net,
 
        class_correct = np.zeros(nlabels)
        class_total = np.zeros(nlabels)
+       resmat = np.zeros((nlabels,nlabels))
+
        with t.no_grad():
             for data in test_loader:
                 array, labels = data['array'].to(device), data['label'].to(device)
@@ -306,11 +308,19 @@ def test(net,
                 label = labels[i]
                 class_correct[label] += c[i].item()
                 class_total[label] += 1
+                resmat[label[i],pred[i].item()] += 1
+
+       resmat = pd.DataFrame(resmat,
+                             columns = test_set.encoding.keys(),
+                             index = test_set.encodig.keys()
+                            )
 
        for i in range(nlabels):
            txtlabel = decoder[i]
            print(f'Accuracy of label {txtlabel} : {100 * class_correct[i] / class_total[i]}',
                  flush = True)
+
+       return resmat
 
 
 
@@ -532,9 +542,24 @@ def main(output_dir,
                                genes = dataset.genelist,
                               )
 
-    test(cnn_net,
-         eval_dataset,
-         num_workers = num_workers)
+    resmat = test(cnn_net,
+                  eval_dataset,
+                  num_workers = num_workers)
+
+    respth = osp.join(output_dir,
+                      '.'.join([TAG,
+                                "pred.res",
+                                "tsv"
+                               ]
+                              )
+                     )
+
+    resmat.to_csv(respth,
+                  sep = '\t',
+                  header = True,
+                  index = True,
+                 )
+
 
 if __name__ == '__main__':
 

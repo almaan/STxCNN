@@ -299,7 +299,7 @@ def test(net,
                 _,pred = t.max(outputs,1)
                 c = (pred == labels).squeeze()
 
-            for i in range(len(test_set)):
+            for i in range(c.shape[0]):
                 label = labels[i]
                 class_correct[label] += c[i].item()
                 class_total[label] += 1
@@ -316,7 +316,7 @@ def train(net,
           val_set,
           batch_size,
           n_epochs,
-          out_dir = os.getcwd(),
+          output_dir,
           lr = 0.001,
           device = None,
           num_workers = 1,
@@ -330,6 +330,11 @@ def train(net,
                               num_workers = num_workers,
                              )
 
+    val_loader = DataLoader(val_set,
+                            batch_size = batch_size,
+                            num_workers = num_workers,
+                            )
+
 
     n_batches = len(train_loader)
 
@@ -341,77 +346,83 @@ def train(net,
 
     val_min = np.inf
 
-    for epoch in range(n_epochs):
-        net.train()
-        total_loss = 0.0
-
-        for i, data in enumerate(train_loader):
-
-            inputs, labels = data['array'], data['label']
-            inputs, labels = Variable(inputs).to(device), Variable(labels).to(device)
-
-            optim.zero_grad()
-
-            outputs = net(inputs)
-            loss = loss_fun(outputs, labels)
-            loss.backward()
-            optim.step()
-
-            total_loss += loss.item()
-
-        print(f"Epoch : {epoch + 1:d} | train_loss : {total_loss}", flush = True)
+    try:
+        for epoch in range(n_epochs):
+            net.train()
+            total_loss = 0.0
+            total_val_loss = 0.0
 
 
-        total_val_loss = 0.0
-        val_loader = DataLoader(val_set,
-                                  batch_size = batch_size,
-                                  num_workers = num_workers,
-                                  )
+            for i, data in enumerate(train_loader):
 
-        net.eval()
+                inputs, labels = data['array'], data['label']
+                inputs, labels = Variable(inputs).to(device), Variable(labels).to(device)
 
-        for sample in val_loader:
+                optim.zero_grad()
 
-             inputs = Variable(sample['array']).to(device)
-             labels = Variable(sample['label']).to(device)
-             val_outputs = net(inputs)
-             val_loss = loss_fun(val_outputs, labels)
-             total_val_loss += val_loss.item()
+                outputs = net(inputs)
+                loss = loss_fun(outputs, labels)
+                loss.backward()
+                optim.step()
 
-        if total_val_loss < val_min:
-            model_opth = osp.join(output_dir,
-                                  '.'.join([TAG,
-                                           'best.val.model.pt'
-                                           ]
-                                          )
-                                 )
+                total_loss += loss.item()
 
-            t.save(cnn_net.state_dict(),
-                   model_opth)
-
-            val_min = total_val_loss
+            print(f"Epoch : {epoch + 1:d} | train_loss : {total_loss}", flush = True)
 
 
-        print(f"Validation loss : {total_val_loss / len(val_loader) }", flush = True)
+            net.eval()
+            for sample in val_loader:
 
-    print("Training Completed",
-          flush = True)
+                 inputs = Variable(sample['array']).to(device)
+                 labels = Variable(sample['label']).to(device)
+                 val_outputs = net(inputs)
+                 val_loss = loss_fun(val_outputs, labels)
+                 total_val_loss += val_loss.item()
 
-if __name__ == '__main__':
+            if total_val_loss < val_min:
+                model_opth = osp.join(output_dir,
+                                      '.'.join([TAG,
+                                               'best.val.model.pt'
+                                               ]
+                                              )
+                                     )
 
-    date = str(datetime.datetime.now())
+                t.save(net.state_dict(),
+                       model_opth)
 
-    prs = parser(date = date)
-    args = prs.parse_args()
+                val_min = total_val_loss
 
-    TAG = re.sub(':|-|\\.| ','',date)
 
-    if args.output_dir is None:
+            print(f"Validation loss : {total_val_loss / len(val_loader) }", flush = True)
+
+        print("Training Completed",
+              flush = True)
+
+    except KeyboardInterrupt:
+        print(f"\nEarly Stopping by user")
+
+
+
+def main(output_dir,
+         device,
+         p_train,
+         data_pth,
+         test_patients,
+         samples,
+         batch_size,
+         epochs,
+         learning_rate,
+         num_workers,
+         ):
+
+
+
+    if output_dir is None:
         output_dir = os.getcwd()
     else:
-        output_dir = args.output_dir
+        output_dir = output_dir
 
-    if args.device.lower() == 'gpu' and t.cuda.is_available():
+    if device.lower() == 'gpu' and t.cuda.is_available():
        device = t.device('cuda')
     else:
        device = t.device('cpu')
@@ -419,17 +430,15 @@ if __name__ == '__main__':
 
     print(f"Will be using Device : {str(device)}",flush = True)
 
-    p_train = args.p_train
+    p_train = p_train
 
-    if args.test_patients:
-        test_patients = [ str(x) for x in args.test_patients ]
+    if test_patients:
+        test_patients = [ str(x) for x in test_patients ]
     else:
         test_patients = ["23287","23567","23268","23270","23209"]
 
-    main_data_pth = args.data_pth
-
-    count_data = glob.glob(main_data_pth + '/count_data/*.tsv.gz')
-    label_data = glob.glob(main_data_pth + '/label_data/*.txt')
+    count_data = glob.glob(data_pth + '/count_data/*.tsv.gz')
+    label_data = glob.glob(data_pth + '/label_data/*.txt')
 
     is_test = lambda x: osp.basename(x).split('.')[0] in test_patients
     is_train  = lambda x: is_test(x) == False
@@ -448,8 +457,8 @@ if __name__ == '__main__':
                      label_data = eval_label_data)
 
 
-    if args.samples is not None:
-        nsamples = min(args.samples,
+    if samples is not None:
+        nsamples = min(samples,
                        len(train_count_data))
     else:
         nsamples = len(train_count_data)
@@ -499,9 +508,10 @@ if __name__ == '__main__':
     train(cnn_net,
           train_set = train_set,
           val_set = val_set,
-          batch_size = args.batch_size,
-          n_epochs = args.epochs,
-          lr = args.learning_rate,
+          batch_size = batch_size,
+          n_epochs = epochs,
+          lr = learning_rate,
+          output_dir = output_dir,
          )
 
     final_model_opth = osp.join(output_dir,
@@ -521,6 +531,14 @@ if __name__ == '__main__':
 
     test(cnn_net,
          eval_dataset,
-         num_workers = args.num_workers)
+         num_workers = num_workers)
 
+if __name__ == '__main__':
 
+    date = str(datetime.datetime.now())
+    TAG = re.sub(':|-|\\.| ','',date)
+
+    prs = parser(date = date)
+    args = prs.parse_args()
+
+    main(**vars(args))

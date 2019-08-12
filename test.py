@@ -25,7 +25,7 @@ if __name__ == "__main__":
                       help = "",
                      )
 
-    prs.add_argument("-o", "--output",
+    prs.add_argument("-o", "--output_dir",
                      type = str,
                      required = False,
                      default = None,

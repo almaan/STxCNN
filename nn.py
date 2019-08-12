@@ -427,13 +427,11 @@ if __name__ == '__main__':
         test_patients = ["23287","23567","23268","23270","23209"]
 
     main_data_pth = args.data_pth
+
     count_data = glob.glob(main_data_pth + '/count_data/*.tsv.gz')
     label_data = glob.glob(main_data_pth + '/label_data/*.txt')
 
-    eval_label_data = [ x for x in label_data if \
-                       osp.basename(x).split('.')[0] in test_patients]
-
-    is_test = lambda x: x.split('.')[0] in test_patients
+    is_test = lambda x: osp.basename(x).split('.')[0] in test_patients
     is_train  = lambda x: is_test(x) == False
 
     train_label_data = list(filter(is_train,label_data))

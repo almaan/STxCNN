@@ -137,8 +137,11 @@ class SpotDataset(Dataset):
         count_pth = [ count_pth[x] for x in unsrt ]
         label_pth = [ label_pth[x] for x in unsrt ]
 
-        for pcnt, plbl in zip(count_pth,label_pth):
-            print(f"loading {pcnt}", flush = True)
+        for k,(pcnt, plbl) in enumerate(zip(count_pth,label_pth)):
+
+            print(f"[{k}/{self.nsamples}] : loading {pcnt}",
+                  flush = True)
+
             c = pd.read_csv(pcnt,
                             sep = '\t',
                             header = 0,

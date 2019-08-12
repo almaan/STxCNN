@@ -541,8 +541,7 @@ def main(output_dir,
            final_model_opth)
 
     eval_dataset = SpotDataset(eval_pths,
-                               #size = len(eval_count_data),
-                               size =10,
+                               size = len(eval_count_data),
                                genes = dataset.genelist,
                               )
 

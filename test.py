@@ -59,10 +59,17 @@ if __name__ == "__main__":
 
     args = prs.parse_args()
 
+    TAG = osp.basename(args.model).split('.')[0]
+
     if args.patient_list is None:
         patients = ["23287","23567","23268","23270","23209"]
     else:
         patients = args.patient_list
+
+    if args.output_dir is None:
+        output_dir = osp.dirname(args.model)
+    else:
+        output_dir = args.output_dir
 
 
     model_pth = args.model
@@ -98,8 +105,22 @@ if __name__ == "__main__":
                                genes = genelist,
                               )
 
-    test(cnn_net,
-         eval_dataset,
-         num_workers = args.num_workers)
+    resmat = test(cnn_net,
+                  eval_dataset,
+                  num_workers = args.num_workers)
+
+    respth = osp.join(output_dir,
+                      '.'.join([TAG,
+                                "test.pred.res",
+                                "tsv"
+                               ]
+                              )
+                     )
+
+    resmat.to_csv(respth,
+                  sep = '\t',
+                  header = True,
+                  index = True,
+                 )
 
 

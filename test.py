@@ -8,6 +8,8 @@ import torch as t
 from nn import SpotDataset, CNN, test
 
 import argparse as arp
+import os.path as osp
+import glob
 
 if __name__ == "__main__":
 
@@ -16,10 +18,10 @@ if __name__ == "__main__":
     prs.add_argument("-m","--model",
                      type = str,
                      required = True,
-                     help "",
+                     help =  "",
                     )
 
-    prs.add_arguments("-g","--gene_list",
+    prs.add_argument("-g","--gene_list",
                       type = str,
                       required = True,
                       help = "",
@@ -47,6 +49,14 @@ if __name__ == "__main__":
                      help = "",
                     )
 
+    prs.add_argument("-d","--data_path",
+                     type = str,
+                     required = False,
+                     default = None,
+                     help = "",
+                     )
+
+
     args = prs.parse_args()
 
     if args.patient_list is None:
@@ -69,8 +79,21 @@ if __name__ == "__main__":
 
     cnn_net.load_state_dict(model)
 
+
+    count_data = glob.glob(args.data_path + '/count_data/*.tsv.gz')
+    label_data = glob.glob(args.data_path + '/label_data/*.txt')
+
+    is_test = lambda x: osp.basename(x).split('.')[0] in patients
+
+    count_data = list(filter(is_test,count_data))
+    label_data = list(filter(is_test,label_data))
+
+    eval_pths = dict(count_data = count_data,
+                     label_data = label_data)
+
+
     eval_dataset = SpotDataset(eval_pths,
-                               size = len(eval_count_data),
+                               size = len(count_data),
                                genes = genelist,
                               )
 

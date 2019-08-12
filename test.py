@@ -19,10 +19,23 @@ if __name__ == "__main__":
                      help "",
                     )
 
+    prs.add_arguments("-g","--gene_list",
+                      type = str,
+                      required = True,
+                      help = "",
+                     )
+
     prs.add_argument("-o", "--output",
                      type = str,
                      required = False,
-                     default = None
+                     default = None,
+                     help = "",
+                    )
+
+    prs.add_argument("-nw", "--num_workers",
+                     type = int,
+                     required = False,
+                     default = 1,
                      help = "",
                     )
 
@@ -44,6 +57,12 @@ if __name__ == "__main__":
 
     model_pth = args.model
 
+    with open(args.gene_list,'w+') as gopen:
+        genelist = list(map(lambda x: x.strip('\n'),
+                            gopen.readlines()))
+
+        genelist = pd.Index(genelist)
+
     model = t.load(model_pth)
 
     cnn_net = CNN(model['conv1.weight'].shape[1])
@@ -52,10 +71,11 @@ if __name__ == "__main__":
 
     eval_dataset = SpotDataset(eval_pths,
                                size = len(eval_count_data),
-                               genes = dataset.genelist,
+                               genes = genelist,
                               )
 
     test(cnn_net,
-         eval_dataset)
+         eval_dataset,
+         num_workers = args.num_workers)
 
 

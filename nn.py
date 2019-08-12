@@ -145,10 +145,7 @@ class SpotDataset(Dataset):
                             index_col = 0,
                             compression = 'gzip',
                            )
-            print("step 1", flush = True)
             rowSums = c.values.sum(axis = 1).reshape(-1,1)
-            # removed rel.freq
-            print("step 2", flush = True)
             if self.genes is not None:
                 tc = pd.DataFrame(np.zeros((c.shape[0],
                                             len(self.genelist))
@@ -171,7 +168,6 @@ class SpotDataset(Dataset):
                 self.genelist = self.genelist.union(c.columns)
                 tc = c
 
-            print("step 3",flush = True)
             with open(plbl,'r+') as lopen:
                 l = lopen.readlines()[0]
 
@@ -179,7 +175,6 @@ class SpotDataset(Dataset):
 
             self.samples.append([tc,l])
 
-        print("step 4", flush = True)
         if self.genes is None:
             for ii in range(len(self.samples)):
 
@@ -200,7 +195,6 @@ class SpotDataset(Dataset):
 
                 self.samples[ii][0] = self.frame2tensor(tc)
 
-        print("step 5", flush = True)
         self.samples = [ {'array':x[0],
                           'label':x[1]} for x in self.samples]
 
@@ -312,7 +306,8 @@ def test(net,
 
        for i in range(nlabels):
            txtlabel = decoder[i]
-           print(f'Accuracy of label {txtlabel} : {100 * class_correct[i] / class_total[i]}',flush = True)
+           print(f'Accuracy of label {txtlabel} : {100 * class_correct[i] / class_total[i]}',
+                 flush = True)
 
 
 
@@ -399,7 +394,8 @@ def train(net,
 
         print(f"Validation loss : {total_val_loss / len(val_loader) }", flush = True)
 
-    print("Training Completed", flush = True)
+    print("Training Completed",
+          flush = True)
 
 if __name__ == '__main__':
 
@@ -437,17 +433,22 @@ if __name__ == '__main__':
     eval_label_data = [ x for x in label_data if \
                        osp.basename(x).split('.')[0] in test_patients]
 
-    eval_count_data = [ x for x in count_data if \
-                       osp.basename(x).split('.')[0] in test_patients]
+    is_test = lambda x: x.split('.')[0] in test_patients
+    is_train  = lambda x: is_test(x) == False
 
+    train_label_data = list(filter(is_train,label_data))
+    train_count_data = list(filter(is_train,count_data))
+
+    train_pths = dict(count_data = train_count_data,
+                      label_data = train_label_data)
+
+
+    eval_label_data = list(filter(is_test,label_data))
+    eval_count_data = list(filter(is_test,count_data))
 
     eval_pths = dict(count_data = eval_count_data,
                      label_data = eval_label_data)
 
-    train_label_data =  [ x for x in label_data if \
-                         osp.basename(x).split('.')[0] not in test_patients]
-    train_count_data = [ x for x in count_data if \
-                        osp.basename(x).split('.')[0] not in test_patients]
 
     if args.samples is not None:
         nsamples = min(args.samples,
@@ -456,9 +457,6 @@ if __name__ == '__main__':
         nsamples = len(train_count_data)
 
     print(f"Will be using {nsamples} for training")
-
-    train_pths = dict(count_data = train_count_data,
-                      label_data = train_label_data)
 
 
 
@@ -475,6 +473,19 @@ if __name__ == '__main__':
                           transform = trf)
 
 
+
+    genefile = osp.join(output_dir,
+                        '.'.join([TAG,
+                                 'gene_set',
+                                 'txt',
+                                 ]
+                                )
+                       )
+
+
+    with open(genefile,'w+') as gopen:
+       gopen.writelines([g + '\n' for g in \
+                         dataset.genelist.tolist()])
 
 
     len_train = int(len(dataset)*p_train)
@@ -511,6 +522,7 @@ if __name__ == '__main__':
                               )
 
     test(cnn_net,
-         eval_dataset)
+         eval_dataset,
+         num_workers = args.num_workers)
 
 

@@ -234,6 +234,8 @@ class CNN(t.nn.Module):
         super(CNN, self).__init__()
 
         self.in_channels = in_channels
+
+
         # Input 8x8xG --> Output 8x8x1024
         self.conv1 = nn.Conv2d(in_channels = self.in_channels,
                                out_channels = 1024,
@@ -242,24 +244,30 @@ class CNN(t.nn.Module):
                                stride = 1,
                               )
 
-        # Input 8x8x100 --> Output 4x4x1024
-        self.pool = nn.AvgPool2d(kernel_size = 2,
+
+
+        # Input 8x8x100 --> Output 6x6x1024
+        self.pool = nn.AvgPool2d(kernel_size = 3,
                                  padding = 0,
-                                 stride = 2,
+                                 stride = 1,
                                 )
 
+        self.bn1 = nn.BatchNorm2d(num_features = 1024)
 
-        # Input 4x4x1024--> Output 3x3x128
+
+        # Input 6x6x1024--> Output 4x4x64
 
         self.conv2 = nn.Conv2d(in_channels = 1024,
-                               out_channels = 128,
-                               kernel_size  = 2,
+                               out_channels = 64,
+                               kernel_size  = 3,
                                padding = 0,
                                stride = 1,
                               )
 
-        # Input 1152x1 -- > Output 128
-        self.fc1 = nn.Linear(in_features = 1152,
+        self.bn2 = nn.BatchNorm2d(num_features = 64)
+
+        # Input 1024x1 -- > Output 128
+        self.fc1 = nn.Linear(in_features = 1024,
                              out_features = 128,
                              bias = True,
                             )
@@ -273,9 +281,9 @@ class CNN(t.nn.Module):
     def forward(self,x):
 
         x = F.relu(self.conv1(x))
-        x = self.pool(x)
-        x = self.conv2(x)
-        x = x.view(-1,1152)
+        x = self.bn1(self.pool(x))
+        x = self.bn2(F.relu(self.conv2(x)))
+        x = x.view(-1,1024)
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
 
@@ -355,6 +363,7 @@ def train(net,
     val_loader = DataLoader(val_set,
                             batch_size = batch_size,
                             num_workers = num_workers,
+                            shuffle = True,
                             )
 
 
